@@ -85,8 +85,10 @@ void mbedtls_mpi_init( mbedtls_mpi *X )
         return;
 
     X->s = 1;
-    X->n = 0;
-    X->p = NULL;
+    X->n = 16;
+    X->p = X->local;
+
+    memset(X->local, 0, sizeof(X->local));
 }
 
 /*
@@ -99,8 +101,10 @@ void mbedtls_mpi_free( mbedtls_mpi *X )
 
     if( X->p != NULL )
     {
-        mbedtls_mpi_zeroize( X->p, X->n );
-        mbedtls_free( X->p );
+        if (X->p != X->local) {
+            mbedtls_mpi_zeroize( X->p, X->n );
+            mbedtls_free( X->p );
+        }
     }
 
     X->s = 1;
@@ -126,8 +130,10 @@ int mbedtls_mpi_grow( mbedtls_mpi *X, size_t nblimbs )
         if( X->p != NULL )
         {
             memcpy( p, X->p, X->n * ciL );
-            mbedtls_mpi_zeroize( X->p, X->n );
-            mbedtls_free( X->p );
+            if (X->p != X->local) {
+                mbedtls_mpi_zeroize( X->p, X->n );
+                mbedtls_free( X->p );
+            }
         }
 
         X->n = nblimbs;
@@ -165,7 +171,9 @@ int mbedtls_mpi_shrink( mbedtls_mpi *X, size_t nblimbs )
     {
         memcpy( p, X->p, i * ciL );
         mbedtls_mpi_zeroize( X->p, X->n );
-        mbedtls_free( X->p );
+        if (X->p != X->local) {
+            mbedtls_free( X->p );
+        }
     }
 
     X->n = i;
