@@ -19,6 +19,8 @@
 #include "platform/mbed_toolchain.h"
 #include "platform/SingletonPtr.h"
 #include "platform/PlatformMutex.h"
+#include "mbed_assert.h"
+
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -97,11 +99,15 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
 #ifdef MBED_MEM_TRACING_ENABLED
     mbed_mem_trace_lock();
 #endif
+
+    MBED_ASSERT(!IsIrqMode());
+
 #ifdef MBED_HEAP_STATS_ENABLED
     malloc_stats_mutex->lock();
     alloc_info_t *alloc_info = (alloc_info_t*)__real__malloc_r(r, size + sizeof(alloc_info_t));
     if (alloc_info != NULL) {
         alloc_info->size = size;
+        alloc_info->pad = 0xcafebabe;
         ptr = (void*)(alloc_info + 1);
         heap_stats.current_size += size;
         heap_stats.total_size += size;
@@ -109,6 +115,9 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
         if (heap_stats.current_size > heap_stats.max_size) {
             heap_stats.max_size = heap_stats.current_size;
         }
+
+        // fill the freed mem up, forces values to be initialized with code, not by luck
+        memset(ptr, 0xA5, size);
     } else {
         heap_stats.alloc_fail_cnt += 1;
     }
@@ -136,10 +145,13 @@ extern "C" void * __wrap__realloc_r(struct _reent * r, void * ptr, size_t size) 
 
     // Note - no lock needed since malloc and free are thread safe
 
+    MBED_ASSERT(!IsIrqMode());
+
     // Get old size
     uint32_t old_size = 0;
     if (ptr != NULL) {
         alloc_info_t *alloc_info = ((alloc_info_t*)ptr) - 1;
+        MBED_ASSERT(alloc_info->pad == 0xcafebabe);
         old_size = alloc_info->size;
     }
 
@@ -173,13 +185,27 @@ extern "C" void free_wrapper(struct _reent * r, void * ptr, void * caller) {
 #ifdef MBED_MEM_TRACING_ENABLED
     mbed_mem_trace_lock();
 #endif
+
+    // XXX: K64F hardcoding, to be taken from the linker generated values (__sram_end, etc)
+#define RAM_START ((void*)0x20000000)
+#define RAM_END ((void*)(RAM_START + 0x30000))
+
+    MBED_ASSERT(!IsIrqMode());
+    MBED_ASSERT((ptr == 0) || ((RAM_START <= ptr) && (ptr <= RAM_END)));
+
 #ifdef MBED_HEAP_STATS_ENABLED
     malloc_stats_mutex->lock();
     alloc_info_t *alloc_info = NULL;
     if (ptr != NULL) {
         alloc_info = ((alloc_info_t*)ptr) - 1;
+
+        MBED_ASSERT(alloc_info->pad == 0xcafebabe);
         heap_stats.current_size -= alloc_info->size;
         heap_stats.alloc_cnt -= 1;
+        alloc_info->pad = 0xdeadbeef;
+
+        // fill the freed mem, so the content is invalid and use after free is more visible
+        memset(ptr, 0xBB, alloc_info->size);
     }
     __real__free_r(r, (void*)alloc_info);
     malloc_stats_mutex->unlock();
