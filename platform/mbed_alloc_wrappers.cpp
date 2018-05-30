@@ -42,9 +42,11 @@ are active, the second one (MBED_MEM_TRACING_ENABLED) will trace the first one's
 /* Implementation of the runtime max heap usage checker                       */
 /******************************************************************************/
 
+#ifdef MBED_HEAP_STATS_ENABLED
 #if defined(TOOLCHAIN_GCC)
 #include "ns_list.h"
 #define HEAP_INTEGRITY_CHECK 1
+#endif
 #endif
 
 /* Size must be a multiple of 8 to keep alignment */
@@ -63,6 +65,10 @@ static mbed_stats_heap_t heap_stats = {0, 0, 0, 0, 0};
 
 #ifdef HEAP_INTEGRITY_CHECK
 static NS_LIST_DEFINE(heap_alloc_info_list, alloc_info_t, link);
+// This counts the amount of allocations/frees after which the heap scan is done.
+// The scan is taking some time, and if done on each operation, it breaks the mbedtls
+// handshake as it does tens of thousands of allocation+free pairs.
+static int alloc_check;
 #endif
 
 #endif
@@ -117,6 +123,16 @@ extern "C" void * __wrap__malloc_r(struct _reent * r, size_t size) {
 // It is also possible, that allocated cell may not have been freed at all while its content has
 // overwritten next cell header and which then causes a fault later at the real_malloc() or real_free().
 static void validate_heap() {
+
+    alloc_check--;
+
+    if (alloc_check > 0) {
+        return;
+    }
+
+    // rate limit to every other operation
+    alloc_check = 2;
+
     ns_list_foreach(const alloc_info_t, cell, &heap_alloc_info_list) {
 
         // each cell in list must have the magic value which marks it allocated
