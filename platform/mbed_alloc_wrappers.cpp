@@ -42,15 +42,29 @@ are active, the second one (MBED_MEM_TRACING_ENABLED) will trace the first one's
 /* Implementation of the runtime max heap usage checker                       */
 /******************************************************************************/
 
+#if defined(TOOLCHAIN_GCC)
+#include "ns_list.h"
+#define HEAP_INTEGRITY_CHECK 1
+#endif
+
 /* Size must be a multiple of 8 to keep alignment */
 typedef struct {
     uint32_t size;
+#ifdef HEAP_INTEGRITY_CHECK
+    // this is 8 bytes, alignment guaranteed
+    ns_list_link_t link;
+#endif
     uint32_t pad;
 } alloc_info_t;
 
 #ifdef MBED_HEAP_STATS_ENABLED
 static SingletonPtr<PlatformMutex> malloc_stats_mutex;
 static mbed_stats_heap_t heap_stats = {0, 0, 0, 0, 0};
+
+#ifdef HEAP_INTEGRITY_CHECK
+static NS_LIST_DEFINE(heap_alloc_info_list, alloc_info_t, link);
+#endif
+
 #endif
 
 void mbed_stats_heap_get(mbed_stats_heap_t *stats)
@@ -96,6 +110,30 @@ extern "C" void * __wrap__malloc_r(struct _reent * r, size_t size) {
 
 #define ALLOC_POSTFIX_CANARY_LENGTH 8
 
+
+#if HEAP_INTEGRITY_CHECK
+// Scan trough the list of allocated cells and verify their canaries. Will have O(N) performance
+// impact, so use with care. This is needed as the per-cell checks are done at malloc() and free().
+// It is also possible, that allocated cell may not have been freed at all while its content has
+// overwritten next cell header and which then causes a fault later at the real_malloc() or real_free().
+static void validate_heap() {
+    ns_list_foreach(const alloc_info_t, cell, &heap_alloc_info_list) {
+
+        // each cell in list must have the magic value which marks it allocated
+        MBED_ASSERT(cell->pad == 0xcafebabe);
+
+        // verify that the data canary is intact
+        const uint8_t* ptr = (uint8_t*)cell + sizeof(alloc_info_t);
+        const uint8_t *canary = ptr + cell->size;
+
+        for (int index = 0; index < ALLOC_POSTFIX_CANARY_LENGTH; index++) {
+            MBED_ASSERT(canary[index] == 0xF3);
+        }
+    }
+}
+#endif
+
+
 extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) {
     void *ptr = NULL;
 #ifdef MBED_MEM_TRACING_ENABLED
@@ -106,6 +144,12 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
 
 #ifdef MBED_HEAP_STATS_ENABLED
     malloc_stats_mutex->lock();
+
+#if HEAP_INTEGRITY_CHECK
+    // This scans trough the list of allocated cells and verifies their canaries. Will have O(N) performance
+    validate_heap();
+#endif
+
     alloc_info_t *alloc_info = (alloc_info_t*)__real__malloc_r(r, size + sizeof(alloc_info_t) + ALLOC_POSTFIX_CANARY_LENGTH);
     if (alloc_info != NULL) {
         alloc_info->size = size;
@@ -117,6 +161,10 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
         if (heap_stats.current_size > heap_stats.max_size) {
             heap_stats.max_size = heap_stats.current_size;
         }
+
+#if HEAP_INTEGRITY_CHECK
+        ns_list_add_to_end(&heap_alloc_info_list, alloc_info);
+#endif
 
         // fill the freed mem up, forces values to be initialized with code, not by luck
         memset(ptr, 0xA5, size);
@@ -204,12 +252,20 @@ extern "C" void free_wrapper(struct _reent * r, void * ptr, void * caller) {
     malloc_stats_mutex->lock();
     alloc_info_t *alloc_info = NULL;
     if (ptr != NULL) {
+
+#if HEAP_INTEGRITY_CHECK
+        validate_heap();
+#endif
         alloc_info = ((alloc_info_t*)ptr) - 1;
 
         MBED_ASSERT(alloc_info->pad == 0xcafebabe);
         heap_stats.current_size -= alloc_info->size;
         heap_stats.alloc_cnt -= 1;
         alloc_info->pad = 0xdeadbeef;
+
+#if HEAP_INTEGRITY_CHECK
+        ns_list_remove(&heap_alloc_info_list, alloc_info);
+#endif
 
         uint8_t *canary = (uint8_t *)ptr + alloc_info->size;
         for (int index = 0; index < ALLOC_POSTFIX_CANARY_LENGTH; index++) {
