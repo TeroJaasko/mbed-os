@@ -94,6 +94,8 @@ extern "C" void * __wrap__malloc_r(struct _reent * r, size_t size) {
     return malloc_wrapper(r, size, MBED_CALLER_ADDR());
 }
 
+#define ALLOC_POSTFIX_CANARY_LENGTH 8
+
 extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) {
     void *ptr = NULL;
 #ifdef MBED_MEM_TRACING_ENABLED
@@ -104,7 +106,7 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
 
 #ifdef MBED_HEAP_STATS_ENABLED
     malloc_stats_mutex->lock();
-    alloc_info_t *alloc_info = (alloc_info_t*)__real__malloc_r(r, size + sizeof(alloc_info_t));
+    alloc_info_t *alloc_info = (alloc_info_t*)__real__malloc_r(r, size + sizeof(alloc_info_t) + ALLOC_POSTFIX_CANARY_LENGTH);
     if (alloc_info != NULL) {
         alloc_info->size = size;
         alloc_info->pad = 0xcafebabe;
@@ -118,6 +120,9 @@ extern "C" void * malloc_wrapper(struct _reent * r, size_t size, void * caller) 
 
         // fill the freed mem up, forces values to be initialized with code, not by luck
         memset(ptr, 0xA5, size);
+
+        // put a canary value after allocated memory so we can check on free if the buffer was overrun
+        memset((uint8_t*)ptr + size, 0xF3, ALLOC_POSTFIX_CANARY_LENGTH);
     } else {
         heap_stats.alloc_fail_cnt += 1;
     }
@@ -163,6 +168,8 @@ extern "C" void * __wrap__realloc_r(struct _reent * r, void * ptr, size_t size) 
     // If the new buffer has been allocated copy the data to it
     // and free the old buffer
     if (new_ptr != NULL) {
+
+        // the postfix canary is checked by free(), no need to do it here
         uint32_t copy_size = (old_size < size) ? old_size : size;
         memcpy(new_ptr, (void*)ptr, copy_size);
         free(ptr);
@@ -188,7 +195,7 @@ extern "C" void free_wrapper(struct _reent * r, void * ptr, void * caller) {
 
     // XXX: K64F hardcoding, to be taken from the linker generated values (__sram_end, etc)
 #define RAM_START ((void*)0x20000000)
-#define RAM_END ((void*)(RAM_START + 0x30000))
+#define RAM_END ((void*)((uint8_t*)RAM_START + 0x30000))
 
     MBED_ASSERT(!IsIrqMode());
     MBED_ASSERT((ptr == 0) || ((RAM_START <= ptr) && (ptr <= RAM_END)));
@@ -204,8 +211,17 @@ extern "C" void free_wrapper(struct _reent * r, void * ptr, void * caller) {
         heap_stats.alloc_cnt -= 1;
         alloc_info->pad = 0xdeadbeef;
 
+        uint8_t *canary = (uint8_t *)ptr + alloc_info->size;
+        for (int index = 0; index < ALLOC_POSTFIX_CANARY_LENGTH; index++) {
+
+            MBED_ASSERT(canary[index] == 0xF3);
+        }
+
         // fill the freed mem, so the content is invalid and use after free is more visible
         memset(ptr, 0xBB, alloc_info->size);
+
+        // overwrite the canary too. Q: why not just leave it there?
+        memset(canary, 0xF5, ALLOC_POSTFIX_CANARY_LENGTH);
     }
     __real__free_r(r, (void*)alloc_info);
     malloc_stats_mutex->unlock();
