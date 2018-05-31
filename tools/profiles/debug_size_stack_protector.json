@@ -6,6 +6,7 @@
                    "-ffunction-sections", "-fdata-sections", "-funsigned-char",
                    "-MMD", "-fno-delete-null-pointer-checks",
                    "-fstack-protector",
+                   "-funwind-tables",
                    "-fomit-frame-pointer", "-O1", "-g3", "-DMBED_DEBUG",
                    "-DMBED_TRAP_ERRORS_ENABLED=1", "-D_RTE_"],
         "asm": ["-x", "assembler-with-cpp"],

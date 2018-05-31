@@ -19,9 +19,52 @@
 #include "platform/mbed_interface.h"
 #include "platform/mbed_critical.h"
 
+#if defined(TOOLCHAIN_GCC)
+
+#include <unwind.h>
+
+static int backtrace_index;
+
+// Note: this may need "-funwind-tables" option given to GCC
+
+// callback for the backtrace unwinder, will be called once for each level
+static _Unwind_Reason_Code dump_backtrace_callback(struct _Unwind_Context *context, void *arg)
+{
+    void *ip = (void *)_Unwind_GetIP(context);
+
+    // frame address, can be decoded with:
+    // "addr2line <address> -e <your-binary.elf>"
+    mbed_error_printf("#%d func address: %p\n", backtrace_index++, ip);
+
+    return _URC_NO_REASON;
+}
+
+// this will at least give the callstack call addresses, which can be demangled offline
+static dump_backtrace(void)
+{
+    mbed_error_printf("backtrace start:\n");
+
+    backtrace_index = 0;
+
+    _Unwind_Backtrace((_Unwind_Trace_Fn)&dump_backtrace_callback, 0);
+
+    // log something at the end to make it visible if the backtrace code died.
+    mbed_error_printf("backtrace done\n");
+}
+#else
+static dump_backtrace(void)
+{
+    // todo: implement, if possible
+}
+#endif
+
 void mbed_assert_internal(const char *expr, const char *file, int line)
 {
     core_util_critical_section_enter();
-    mbed_error_printf("mbed assertation failed: %s, file: %s, line %d \n", expr, file, line);
+    mbed_error_printf("mbed assertation failed: %s, file: %s, line %d\n", expr, file, line);
+
+    // experimental backtrace, works on my machine with GCC and debug profile with -funwind-tables"
+    dump_backtrace();
+
     mbed_die();
 }
