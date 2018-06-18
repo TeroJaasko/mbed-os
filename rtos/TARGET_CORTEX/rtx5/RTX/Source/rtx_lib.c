@@ -27,7 +27,6 @@
 #include "RTX_Config.h"
 #include "rtx_os.h"
 
-
 // System Configuration
 // ====================
 
@@ -37,7 +36,7 @@
 #error "Invalid Dynamic Memory size!"
 #endif
 static uint64_t os_mem[OS_DYNAMIC_MEM_SIZE/8] \
-__attribute__((section(".bss.os")));
+__SECTION_ZERO_INIT(".bss.os");
 #endif
 
 // Kernel Tick Frequency
@@ -47,7 +46,7 @@ __attribute__((section(".bss.os")));
 
 // ISR FIFO Queue
 static void *os_isr_queue[OS_ISR_FIFO_QUEUE] \
-__attribute__((section(".bss.os")));
+__SECTION_ZERO_INIT(".bss.os");
 
 
 // Thread Configuration
@@ -74,12 +73,12 @@ __attribute__((section(".bss.os")));
 
 // Thread Control Blocks
 static osRtxThread_t os_thread_cb[OS_THREAD_NUM] \
-__attribute__((section(".bss.os.thread.cb")));
+__SECTION_ZERO_INIT(".bss.os.thread.cb");
 
 // Thread Default Stack
 #if (OS_THREAD_DEF_STACK_NUM != 0)
 static uint64_t os_thread_def_stack[OS_THREAD_DEF_STACK_NUM*(OS_STACK_SIZE/8)] \
-__attribute__((section(".bss.os.thread.stack")));
+__SECTION_ZERO_INIT(".bss.os.thread.stack");
 #endif
 
 // Memory Pool for Thread Control Blocks
@@ -97,7 +96,7 @@ __attribute__((section(".data.os.thread.mpi"))) =
 // Memory Pool for Thread Stack
 #if (OS_THREAD_USER_STACK_SIZE != 0)
 static uint64_t os_thread_stack[2 + OS_THREAD_NUM + (OS_THREAD_USER_STACK_SIZE/8)] \
-__attribute__((section(".bss.os.thread.stack")));
+__SECTION_ZERO_INIT(".bss.os.thread.stack");
 #endif
 
 #endif  // (OS_THREAD_OBJ_MEM != 0)
@@ -113,11 +112,11 @@ void osRtxThreadStackCheck (void) {}
 
 // Idle Thread Control Block
 static osRtxThread_t os_idle_thread_cb \
-__attribute__((section(".bss.os.thread.cb")));
+__SECTION_ZERO_INIT(".bss.os.thread.cb");
 
 // Idle Thread Stack
 static uint64_t os_idle_thread_stack[OS_IDLE_THREAD_STACK_SIZE/8] \
-__attribute__((section(".bss.os.thread.stack")));
+__SECTION_ZERO_INIT(".bss.os.thread.stack");
 
 // Idle Thread Attributes
 static const osThreadAttr_t os_idle_thread_attr = {
@@ -152,7 +151,7 @@ static const osThreadAttr_t os_idle_thread_attr = {
 
 // Timer Control Blocks
 static osRtxTimer_t os_timer_cb[OS_TIMER_NUM] \
-__attribute__((section(".bss.os.timer.cb")));
+__SECTION_ZERO_INIT(".bss.os.timer.cb");
 
 // Memory Pool for Timer Control Blocks
 static osRtxMpInfo_t os_mpi_timer \
@@ -170,11 +169,11 @@ __attribute__((section(".data.os.timer.mpi"))) =
 
 // Timer Thread Control Block
 static osRtxThread_t os_timer_thread_cb \
-__attribute__((section(".bss.os.thread.cb")));
+__SECTION_ZERO_INIT(".bss.os.thread.cb");
 
 // Timer Thread Stack
 static uint64_t os_timer_thread_stack[OS_TIMER_THREAD_STACK_SIZE/8] \
-__attribute__((section(".bss.os.thread.stack")));
+__SECTION_ZERO_INIT(".bss.os.thread.stack");
 
 // Timer Thread Attributes
 static const osThreadAttr_t os_timer_thread_attr = {
@@ -200,11 +199,11 @@ static const osThreadAttr_t os_timer_thread_attr = {
 
 // Timer Message Queue Control Block
 static osRtxMessageQueue_t os_timer_mq_cb \
-__attribute__((section(".bss.os.msgqueue.cb")));
+__SECTION_ZERO_INIT(".bss.os.msgqueue.cb");
 
 // Timer Message Queue Data
 static uint32_t os_timer_mq_data[osRtxMessageQueueMemSize(OS_TIMER_CB_QUEUE,8)/4] \
-__attribute__((section(".bss.os.msgqueue.mem")));
+__SECTION_ZERO_INIT(".bss.os.msgqueue.mem");
 
 // Timer Message Queue Attributes
 static const osMessageQueueAttr_t os_timer_mq_attr = {
@@ -235,7 +234,7 @@ extern void osRtxTimerThread (void *argument);
 
 // Event Flags Control Blocks
 static osRtxEventFlags_t os_ef_cb[OS_EVFLAGS_NUM] \
-__attribute__((section(".bss.os.evflags.cb")));
+__SECTION_ZERO_INIT(".bss.os.evflags.cb");
 
 // Memory Pool for Event Flags Control Blocks
 static osRtxMpInfo_t os_mpi_ef \
@@ -256,7 +255,7 @@ __attribute__((section(".data.os.evflags.mpi"))) =
 
 // Mutex Control Blocks
 static osRtxMutex_t os_mutex_cb[OS_MUTEX_NUM] \
-__attribute__((section(".bss.os.mutex.cb")));
+__SECTION_ZERO_INIT(".bss.os.mutex.cb");
 
 // Memory Pool for Mutex Control Blocks
 static osRtxMpInfo_t os_mpi_mutex \
@@ -277,7 +276,7 @@ __attribute__((section(".data.os.mutex.mpi"))) =
 
 // Semaphore Control Blocks
 static osRtxSemaphore_t os_semaphore_cb[OS_SEMAPHORE_NUM] \
-__attribute__((section(".bss.os.semaphore.cb")));
+__SECTION_ZERO_INIT(".bss.os.semaphore.cb");
 
 // Memory Pool for Semaphore Control Blocks
 static osRtxMpInfo_t os_mpi_semaphore \
@@ -298,7 +297,7 @@ __attribute__((section(".data.os.semaphore.mpi"))) =
 
 // Memory Pool Control Blocks
 static osRtxMemoryPool_t os_mp_cb[OS_MEMPOOL_NUM] \
-__attribute__((section(".bss.os.mempool.cb")));
+__SECTION_ZERO_INIT(".bss.os.mempool.cb");
 
 // Memory Pool for Memory Pool Control Blocks
 static osRtxMpInfo_t os_mpi_mp \
@@ -311,7 +310,7 @@ __attribute__((section(".data.os.mempool.mpi"))) =
 #error "Invalid Data Memory size for Memory Pools!"
 #endif
 static uint64_t os_mp_data[2 + OS_MEMPOOL_NUM + (OS_MEMPOOL_DATA_SIZE/8)] \
-__attribute__((section(".bss.os.mempool.mem")));
+__SECTION_ZERO_INIT(".bss.os.mempool.mem");
 #endif
 
 #endif  // (OS_MEMPOOL_OBJ_MEM != 0)
@@ -328,7 +327,7 @@ __attribute__((section(".bss.os.mempool.mem")));
 
 // Message Queue Control Blocks
 static osRtxMessageQueue_t os_mq_cb[OS_MSGQUEUE_NUM] \
-__attribute__((section(".bss.os.msgqueue.cb")));
+__SECTION_ZERO_INIT(".bss.os.msgqueue.cb");
 
 // Memory Pool for Message Queue Control Blocks
 static osRtxMpInfo_t os_mpi_mq \
@@ -341,7 +340,7 @@ __attribute__((section(".data.os.msgqueue.mpi"))) =
 #error "Invalid Data Memory size for Message Queues!"
 #endif
 static uint64_t os_mq_data[2 + OS_MSGQUEUE_NUM + (OS_MSGQUEUE_DATA_SIZE/8)] \
-__attribute__((section(".bss.os.msgqueue.mem")));
+__SECTION_ZERO_INIT(".bss.os.msgqueue.mem");
 #endif
 
 #endif  // (OS_MSGQUEUE_OBJ_MEM != 0)
@@ -623,11 +622,11 @@ __WEAK void software_init_hook (void) {
 
 // Memory for libspace
 static uint32_t os_libspace[OS_THREAD_LIBSPACE_NUM+1][LIBSPACE_SIZE/4] \
-__attribute__((section(".bss.os.libspace")));
+__SECTION_ZERO_INIT(".bss.os.libspace");
 
 // Thread IDs for libspace
 static osThreadId_t os_libspace_id[OS_THREAD_LIBSPACE_NUM] \
-__attribute__((section(".bss.os.libspace")));
+__SECTION_ZERO_INIT(".bss.os.libspace");
 
 // Check if Kernel has been started
 static uint32_t os_kernel_is_active (void) {
