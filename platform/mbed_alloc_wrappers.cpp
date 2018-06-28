@@ -45,7 +45,7 @@ are active, the second one (MBED_MEM_TRACING_ENABLED) will trace the first one's
 #ifdef MBED_HEAP_STATS_ENABLED
 #if defined(TOOLCHAIN_GCC)
 #include "ns_list.h"
-#define HEAP_INTEGRITY_CHECK 1
+//XXX #define HEAP_INTEGRITY_CHECK 1
 #endif
 #endif
 
