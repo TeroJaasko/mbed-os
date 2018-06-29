@@ -43,7 +43,8 @@ extern osMutexId_t singleton_mutex_id;
 inline static void singleton_lock(void)
 {
 #ifdef MBED_CONF_RTOS_PRESENT
-    osMutexAcquire(singleton_mutex_id, osWaitForever);
+    osStatus_t status = osMutexAcquire(singleton_mutex_id, osWaitForever);
+    MBED_ASSERT(status == osOK);
 #endif
 }
 
@@ -56,7 +57,8 @@ inline static void singleton_lock(void)
 inline static void singleton_unlock(void)
 {
 #ifdef MBED_CONF_RTOS_PRESENT
-    osMutexRelease (singleton_mutex_id);
+    osStatus_t status = osMutexRelease (singleton_mutex_id);
+    MBED_ASSERT(status == osOK);
 #endif
 }
 
